@@ -1,0 +1,57 @@
+#!/bin/bash
+
+RED="\033[31m"
+GREEN="\033[32m"
+YELLOW="\033[33m"
+RESET="\033[0m"
+
+calc_load() {
+    line=$(grep "^cpu " /proc/stat)
+    read _ user nice system idle iowait irq softirq steal _rest <<< "$line"
+
+    idle_all=$((idle + iowait))
+    non_idle=$((user + nice + system + irq + softirq + steal))
+    total=$((idle_all + non_idle))
+
+    if [ "$total" -gt 0 ]; then
+        awk -v n="$non_idle" -v t="$total" 'BEGIN { printf "%.1f", n*100.0/t }'
+    else
+        echo "0.0"
+    fi
+}
+
+draw_screen() {
+    load=$(calc_load)
+    load_int=${load%.*}
+
+    if [ "$load_int" -lt 30 ]; then
+        color=$GREEN
+    elif [ "$load_int" -lt 70 ]; then
+        color=$YELLOW
+    else
+        color=$RED
+    fi
+
+    filled=$(( load_int / 10 ))
+    empty=$(( 10 - filled ))
+
+    bar=""
+    for ((i=0; i<filled; i++)); do bar="${bar}█"; done
+    for ((i=0; i<empty; i++)); do bar="${bar}░"; done
+
+    clear
+    echo "===== CPU 상태 모니터 (cpustat) ====="
+    echo -e "현재 CPU 부하율: ${color}${load}%${RESET}  [${bar}]"
+    echo
+    cat /dev/cpumon
+}
+
+if [ "$1" = "-w" ]; then
+    interval=${2:-1}
+    while true; do
+        draw_screen
+        sleep $interval
+    done
+else
+    draw_screen
+fi
